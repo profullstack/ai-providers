@@ -1,0 +1,44 @@
+{
+  "name": "@profullstack/ai-providers",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "One text-model call for every Profullstack app: c0mpute first, OpenAI and Anthropic as alternating fallbacks, dead keys parked. Zero dependencies.",
+  "keywords": [
+    "ai",
+    "llm",
+    "c0mpute",
+    "infernet",
+    "openai",
+    "anthropic",
+    "fallback",
+    "router"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/profullstack/ai-providers.git"
+  },
+  "homepage": "https://github.com/profullstack/ai-providers#readme",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "ai-providers": "./src/cli.js"
+  },
+  "files": [
+    "src",
+    "index.d.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
