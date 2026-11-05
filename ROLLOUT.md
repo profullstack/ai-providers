@@ -13,10 +13,7 @@ Inventory: [FLEET-INVENTORY.md](FLEET-INVENTORY.md) (115 repos hit, 25 skipped a
    - **Already a provider chain** (nixamp, mynaposter, agenticjobs, advis0r, OutreachGraph): put c0mpute at the head of the chain.
 3. Any "is a paid key set?" gate also counts c0mpute (`C0MPUTE_DISABLED` is the only off switch).
 4. Embeddings and images stay on their vendor and must not be fatal. crawlproof articles failed outright on an embedding 429.
-5. Mint an Infernet trusted-client key, one per app:
-   - `KEY=ifc_$(openssl rand -hex 24)`
-   - append `<app>:<sha256(KEY)>` to `INFERNET_TRUSTED_CLIENT_KEYS` in `~/www/infernetprotocol.com/app.env` (back it up first)
-   - recreate with `docker compose -f docker-compose.app.yml --env-file deploy.env up -d app`. Without `--env-file` it lands on a random port and 503s.
+5. Use the fleet **account** key, not a trusted-client key — see "What a key has to be now" below. One `ik_live_` key already exists (`ik_live__9e2Hb`, "fleet apps (ai-providers) 2026-11-05") on dev2 at `~/.c0mpute-fleet.env` and in `~/.config/myna/ai.env` on bonita.
 6. Put `C0MPUTE_API_KEY` (and `C0MPUTE_TIMEOUT_MS` for long outputs) in the app's `app.env` and its logicsrc vault.
 7. Test, merge, deploy, then trigger one real generation in prod and check that `provider` is `c0mpute`.
 
@@ -27,7 +24,7 @@ Fan-out is 3 repos at a time (STANDING, dev2 OOM 2026-10-19).
 | Wave | What | Why first |
 |---|---|---|
 | 0 | **Done 2026-11-02:** package 0.1.0, crawlproof.com (#424), stack.md AI row (profullstack-web #181) | crawlproof was the one failing loudly |
-| 1 | `@profullstack/autoblog` `scoreQuality` | one release fixes 7 apps: crawlproof, coinpayportal, bl0ggers, d0rz, logicsrc, media-streamer, niche-db |
+| 1 | **Done 2026-11-05:** `@profullstack/autoblog` `scoreQuality` ([#2](https://github.com/profullstack/autoblog/pull/2), published `0.5.0`) | one release fixes 7 apps: crawlproof, coinpayportal, bl0ggers, d0rz, logicsrc, media-streamer, niche-db — they each still need a `@profullstack/autoblog@^0.5.0` bump |
 | 2 | Shared npm libs: social-poster, lead-generator, summary-forge-module, link-directories (`directories`), neon-builder, therapy, viral-video (script step only) | consumers inherit the change by bumping |
 | 3 | Live dev2 apps with a provider chain: nixamp, mynaposter, agenticjobs, advis0r, demo.movie, rssamplifier.com (needs streaming), qaaas.dev, ringhuman, reeleel, pwamart, smshub auto-reply, profullstack-web motd, brisk.news, bittorrented | revenue and traffic |
 | 4 | Remaining live dev2 apps (29 in total with wave 3; see the inventory) | |
@@ -49,6 +46,37 @@ Not conversions:
 | Vision | aiornot, imageroster, mediaanalyzer, linkedin-networking-bot | stays on vendor until a c0mpute vision model is a house model |
 | OpenAI-compatible endpoint | vu1nz (Python) and anything non-JS | Infernet `/v1/chat/completions` shim over `/api/chat` |
 | Deprecate `@profullstack/ai` | | `npm deprecate` pointing here |
+
+## What a key has to be now (measured 2026-11-05)
+
+Interactive metering went live on 2026-11-05 and the subsidy was stopped the same day, so the economics this plan was written against are gone. Measured against production:
+
+| Caller | What happens |
+|---|---|
+| No key (anonymous) | **10 free queries a day**, then `429`. Was 20/hour per IP. |
+| Trusted-client key (`ifc_`), no end-user subject | resolves `trusted_unlinked` -> the same 10/day free tier. **Buys nothing.** |
+| Account key (`ik_live_`) on a funded account | `mode: "balance"`, charged per job, no daily cap |
+
+So a trusted-client key is the wrong instrument for a fleet app: it identifies the *app*, and billing needs an *account*. Apps carry an `ik_live_` key; the package already sends it as `Authorization: Bearer`, which `billingCaller` resolves, so no package change was needed.
+
+`free_tier_when_empty` is `true`, so an account key on an empty balance degrades to the 10/day free tier rather than `402`. A key is therefore always safe to wire up.
+
+### Funding: already paid for
+
+`interactive_billing.spend_earned` is `true`, and `spendableMicro` counts `earned_spendable_micro`. Our nodes have **$15.23 of confirmed earnings** (`billing_funding_preview`), which is spendable for interactive inference *as it stands* — no `fund-from-earnings` call, which is one-way and would only write those dollars out of `provider_available_usd` for nothing.
+
+A short JSON generation charges **5 micro-USD**, so $15.23 is roughly **3 million calls**. Fleet inference is effectively prepaid. Nothing here needs Anthony.
+
+## Risk: the frontier fallback is not a fallback
+
+Checked 2026-11-05, both paid keys in `~/.config/myna/ai.env`:
+
+- `OPENAI_API_KEY` -> **`401 Incorrect API key provided`**. The key is dead, not merely out of credit.
+- `ANTHROPIC_API_KEY` -> **`credit balance too low`**.
+
+The router rotates to them, gets a `billing` failure, and parks them. That is correct behaviour and it keeps apps up, but it means **c0mpute is not the default with a safety net — it is the only working provider.** Until one paid key is replaced or topped up, every converted app is single-sourced on the peer network. Treat c0mpute supply as a production dependency, not a cost optimisation.
+
+(This is also why the rollout matters: before it, apps calling Anthropic directly were not degrading, they were failing.)
 
 ## Risk: c0mpute supply
 
