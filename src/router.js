@@ -104,7 +104,9 @@ export class AiRouter {
    *
    * @template T
    * @param {(provider: any) => Promise<T>} task
-   * @param {{ feature?: string, only?: string[] }} [opts]
+   * @param {{ feature?: string, only?: string[], final?: () => boolean }} [opts]
+   *   `final`, checked after a failure: true stops here instead of moving on
+   *   (streamText sets it once text has gone out).
    * @returns {Promise<{ provider: string, value: T, attempts: object[] }>}
    */
   async run(task, opts = {}) {
@@ -131,6 +133,11 @@ export class AiRouter {
           kind: error.kind,
           error: error.message,
         });
+        if (opts.final?.()) {
+          const err = new AllProvidersFailedError(attempts, skipped);
+          err.partial = true;
+          throw err;
+        }
       }
     }
     throw new AllProvidersFailedError(attempts, skipped);
@@ -145,6 +152,40 @@ export class AiRouter {
       if (!out.text?.trim()) throw new ProviderError(p.name, 'empty answer', { kind: 'output' });
       return out;
     }, req);
+    return { ...value, provider, attempts };
+  }
+
+  /**
+   * Streams text: `req.onToken` gets each piece as it arrives, and the promise
+   * resolves to the same result generateText returns. Providers are tried in
+   * the usual order, but only until one has streamed something: after the
+   * first token a failure is final (`error.partial === true`), since the
+   * caller has already shown that text. A provider with no `stream` method is
+   * called with `generate` and its whole answer sent as one token.
+   *
+   * @param {import('../index.js').StreamRequest} req
+   */
+  async streamText(req) {
+    let emitted = false;
+    const send = (t) => {
+      if (!t) return;
+      emitted = true;
+      req.onToken?.(t);
+    };
+    const { provider, value, attempts } = await this.run(
+      async (p) => {
+        const out =
+          typeof p.stream === 'function'
+            ? await p.stream(req, send)
+            : await p.generate(req).then((o) => {
+                if (o.text?.trim()) send(o.text);
+                return o;
+              });
+        if (!out.text?.trim()) throw new ProviderError(p.name, 'empty answer', { kind: 'output' });
+        return out;
+      },
+      { feature: req.feature, only: req.only, final: () => emitted },
+    );
     return { ...value, provider, attempts };
   }
 

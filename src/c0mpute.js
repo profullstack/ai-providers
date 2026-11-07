@@ -16,6 +16,7 @@
  * so "any node" is off unless `anyModel` is set.
  */
 import { ProviderError, toProviderError } from './errors.js';
+import { sseEvents } from './sse.js';
 
 export const DEFAULT_C0MPUTE_URL = 'https://infernetprotocol.com';
 export const DEFAULT_C0MPUTE_MODELS = [
@@ -56,7 +57,23 @@ export class C0mputeProvider {
   }
 
   /** @param {import('../index.js').TextRequest} req */
-  async generate(req) {
+  generate(req) {
+    return this.#call(req);
+  }
+
+  /**
+   * Same as generate, calling `onToken` with each piece of text as the node
+   * writes it. Once a token has gone out, a stall or a dropped stream is an
+   * error rather than a quiet retry on the next model.
+   *
+   * @param {import('../index.js').TextRequest} req
+   * @param {(text: string) => void} onToken
+   */
+  stream(req, onToken) {
+    return this.#call(req, onToken);
+  }
+
+  async #call(req, onToken) {
     const release = await this.slots.acquire();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? this.timeoutMs);
@@ -119,6 +136,13 @@ export class C0mputeProvider {
           }, this.stallMs);
         };
         let out;
+        let emitted = false;
+        const emit = onToken
+          ? (t) => {
+              emitted = true;
+              onToken(t);
+            }
+          : undefined;
         try {
           arm();
           const stream = await this.fetch(`${this.baseUrl}/api/chat/stream/${job.jobId}`, {
@@ -134,9 +158,16 @@ export class C0mputeProvider {
               kind: 'capacity',
             });
           }
-          out = await readStream(stream.body, arm);
+          out = await readStream(stream.body, arm, emit);
         } catch (err) {
           if (!stalled) throw err;
+          if (emitted) {
+            throw new ProviderError(
+              'c0mpute',
+              `${model ?? 'any'}: stopped streaming for ${Math.round(this.stallMs / 1000)}s mid-answer (job ${job.jobId})`,
+              { status: 504, kind: 'capacity' },
+            );
+          }
           last = new ProviderError(
             'c0mpute',
             `${model ?? 'any'}: no answer for ${Math.round(this.stallMs / 1000)}s (job ${job.jobId})`,
@@ -180,49 +211,36 @@ export function toMessages(req) {
   ];
 }
 
-/** Reads `meta`, `token` and `done` events until `done` or `error`. */
-export async function readStream(body, onEvent) {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+/**
+ * Reads `meta`, `token` and `done` events until `done` or `error`.
+ * `onToken` gets each token as it arrives; if `done` carries a fuller text than
+ * the tokens added up to, the missing tail is emitted too.
+ */
+export async function readStream(body, onEvent, onToken) {
   let text = '';
   let model;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (value?.length) onEvent?.();
-    if (value) buffer += decoder.decode(value, { stream: true });
-    buffer = buffer.replace(/\r\n/g, '\n');
-    let cut;
-    while ((cut = buffer.indexOf('\n\n')) >= 0) {
-      const block = buffer.slice(0, cut);
-      buffer = buffer.slice(cut + 2);
-      const event = /^event:\s*(.+)$/m.exec(block)?.[1]?.trim();
-      const raw = block
-        .split('\n')
-        .filter((l) => l.startsWith('data:'))
-        .map((l) => l.slice(5).trimStart())
-        .join('\n');
-      if (!event || !raw) continue;
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        continue;
-      }
-      if (event === 'meta' && typeof data.model === 'string') model = data.model;
-      else if (event === 'token' && typeof data.text === 'string') text += data.text;
-      else if (event === 'done') {
-        await reader.cancel().catch(() => {});
-        return { text: typeof data.text === 'string' && data.text ? data.text : text, model };
-      } else if (event === 'error') {
-        await reader.cancel().catch(() => {});
-        throw new ProviderError('c0mpute', String(data.message ?? data.error ?? 'job failed'), {
-          status: 502,
-          kind: 'capacity',
-        });
-      }
+  for await (const { event, data: raw } of sseEvents(body, onEvent)) {
+    if (!event || !raw) continue;
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      continue;
     }
-    if (done) break;
+    if (event === 'meta' && typeof data.model === 'string') model = data.model;
+    else if (event === 'token' && typeof data.text === 'string') {
+      text += data.text;
+      if (data.text) onToken?.(data.text);
+    } else if (event === 'done') {
+      const final = typeof data.text === 'string' && data.text ? data.text : text;
+      if (onToken && final.length > text.length && final.startsWith(text)) onToken(final.slice(text.length));
+      return { text: final, model };
+    } else if (event === 'error') {
+      throw new ProviderError('c0mpute', String(data.message ?? data.error ?? 'job failed'), {
+        status: 502,
+        kind: 'capacity',
+      });
+    }
   }
   // No done event: the node or the connection died mid-answer.
   throw new ProviderError(

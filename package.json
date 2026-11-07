@@ -1,6 +1,6 @@
 {
   "name": "@profullstack/ai-providers",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
   "description": "One text-model call for every Profullstack app: c0mpute first, OpenAI and Anthropic as alternating fallbacks, dead keys parked. Zero dependencies.",
   "keywords": [

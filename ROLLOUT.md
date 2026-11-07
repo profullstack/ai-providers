@@ -41,7 +41,7 @@ Not conversions:
 
 | Need | Who | Plan |
 |---|---|---|
-| Streaming text | rssamplifier translate, parklookup trip generator | `streamText()` over the same SSE reader (0.2.0) |
+| Streaming text | rssamplifier translate, parklookup trip generator | **Done in 0.2.0:** `streamText()` over the same SSE reader, paid fallbacks stream too |
 | Tool calling | c0upons agent loop | JSON-schema tool emulation on c0mpute, real tools on paid fallbacks |
 | Vision | aiornot, imageroster, mediaanalyzer, linkedin-networking-bot | stays on vendor until a c0mpute vision model is a house model |
 | OpenAI-compatible endpoint | vu1nz (Python) and anything non-JS | Infernet `/v1/chat/completions` shim over `/api/chat` |
