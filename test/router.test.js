@@ -6,6 +6,8 @@ import {
   classify,
   createAiProviders,
   extractJson,
+  jsonInstructions,
+  unwrapEcho,
   C0mputeProvider,
   OpenAIProvider,
   AnthropicProvider,
@@ -192,4 +194,54 @@ test('createAiProviders: c0mpute always, paid only with keys, AI_PAID_FALLBACK=o
   assert.deepEqual(names(createAiProviders({ env: { C0MPUTE_DISABLED: '1', OPENAI_API_KEY: 'a' } })), ['openai']);
   const r = createAiProviders({ env: { C0MPUTE_MODELS: 'a, b' } });
   assert.deepEqual(r.primary[0].models, ['a', 'b']);
+});
+
+// The answers below are the shapes huihui_ai/qwen3.5-abliterated:9b really gave
+// for crawlproof ad copy, 2026-11-07.
+const adSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  properties: { headline: { type: 'string' }, body: { type: 'string' } },
+  required: ['headline', 'body'],
+  additionalProperties: false,
+};
+const needsAd = (v) => {
+  if (typeof v?.headline !== 'string' || typeof v?.body !== 'string') throw new Error('headline and body required');
+  return v;
+};
+
+test('a model that answers in the shape of the schema keeps its values', async () => {
+  const echo = JSON.stringify({ ...adSchema, properties: { headline: 'See your site', body: 'Ask 9 models.' } });
+  const provider = ok('c0mpute', echo);
+  const { object } = await new AiRouter({ primary: [provider] }).generateObject({
+    name: 'ad_copy',
+    schema: needsAd,
+    jsonSchema: adSchema,
+    user: 'x',
+  });
+  assert.deepEqual(object, { headline: 'See your site', body: 'Ask 9 models.' });
+  assert.equal(provider.calls, 1, 'no repair round for an answer that was already right');
+});
+
+test('unwrapEcho takes a wrapper named after the object, or a lone wrapper', () => {
+  const ad = { headline: 'a', body: 'b' };
+  assert.deepEqual(unwrapEcho({ ad_copy: ad }, adSchema, 'ad_copy'), ad);
+  assert.deepEqual(unwrapEcho({ result: ad }, adSchema), ad);
+});
+
+test('unwrapEcho leaves a real answer alone', () => {
+  const flat = { $schema: 'x', headline: 'a', body: 'b' };
+  assert.equal(unwrapEcho(flat, adSchema), flat);
+  const own = { type: 'object', properties: { properties: { type: 'object' } } };
+  const value = { properties: { properties: { a: 1 } } };
+  assert.equal(unwrapEcho(value, own), value, 'a field really called properties');
+  const junk = { properties: { other: 1 } };
+  assert.equal(unwrapEcho(junk, adSchema), junk);
+});
+
+test('the prompt leaves out the schema meta keys and says not to echo it', () => {
+  const text = jsonInstructions('ad_copy', adSchema);
+  assert.ok(!text.includes('$schema'));
+  assert.ok(text.includes('"headline"'));
+  assert.match(text, /not part of it/);
 });

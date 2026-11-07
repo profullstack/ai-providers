@@ -13,7 +13,7 @@
  * A success clears it.
  */
 import { ProviderError, toProviderError } from './errors.js';
-import { extractJson, validate, jsonInstructions } from './json.js';
+import { extractJson, validate, jsonInstructions, unwrapEcho } from './json.js';
 
 export class AllProvidersFailedError extends Error {
   constructor(attempts, skipped = []) {
@@ -163,10 +163,11 @@ export class AiRouter {
 export async function generateObjectOn(provider, req) {
   const system = [req.system, jsonInstructions(req.name, req.jsonSchema)].filter(Boolean).join('\n\n');
   const base = { ...req, system, json: true };
+  const read = (text) => validate(req.schema, unwrapEcho(extractJson(text), req.jsonSchema, req.name));
   let out = await provider.generate(base);
   let object;
   try {
-    object = validate(req.schema, extractJson(out.text));
+    object = read(out.text);
   } catch (first) {
     const repairs = req.repairs ?? 1;
     if (repairs < 1) throw new ProviderError(provider.name, first.message, { kind: 'output' });
@@ -187,7 +188,7 @@ export async function generateObjectOn(provider, req) {
       ].join('\n'),
     });
     try {
-      object = validate(req.schema, extractJson(out.text));
+      object = read(out.text);
     } catch (second) {
       throw new ProviderError(provider.name, second.message, { kind: 'output' });
     }
