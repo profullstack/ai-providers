@@ -57,7 +57,7 @@ A thrown error with `status` 401/402/403, or a 429 or 400 that mentions credits 
 
 | Variable | Default | |
 |---|---|---|
-| `C0MPUTE_API_KEY` | none | Infernet trusted-client key (`ifc_...`), one per app. Without it the public limit is 20 requests an hour per IP. |
+| `C0MPUTE_API_KEY` | none | Infernet **account** key (`ik_live_...`), billed per job. An `ifc_` trusted-client key without an end-user subject, or no key at all, gets the free tier of 10 queries a day. |
 | `C0MPUTE_URL` | `https://infernetprotocol.com` | |
 | `C0MPUTE_MODELS` | `huihui_ai/qwen3.5-abliterated:9b,qwen2.5:7b,qwen3:4b,gemma3:4b,huihui_ai/qwen3.5-abliterated:4b` | Tried in order. The first is an Infernet house model every node pulls. |
 | `C0MPUTE_ANY_MODEL` | off | Let any free node answer as a last resort. Small models write junk JSON. |

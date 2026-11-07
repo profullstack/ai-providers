@@ -5,8 +5,9 @@
  *     -> {jobId, source, model}
  *   GET  /api/chat/stream/<jobId>   server-sent events: meta, token..., done | error
  *
- * Without a key the public playground allows 20 requests an hour per IP. A
- * trusted-client key (`ifc_...`, one per app) has its own budget.
+ * Use an account key (`ik_live_...`): it is billed per job with no daily cap.
+ * With no key, or a trusted-client key (`ifc_...`) that names no end user, the
+ * caller gets the free tier of 10 queries a day.
  *
  * `p2p_only` (default on) stops Infernet handing the job to its billed hosted
  * fallback; an answer from anything but a peer node is refused.
