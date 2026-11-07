@@ -57,9 +57,39 @@ export function validate(schema, value) {
   return value;
 }
 
+const isObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * Small models shown a JSON Schema often answer in the shape of the schema, with
+ * correct values one level down: {"$schema":..., "type":"object", "properties":
+ * {"headline":"Real copy", ...}, "required":[...]}. Nothing is wrong with the
+ * values, but validating that object reports every field as undefined. Same for
+ * {"ad_copy":{...}}, where the object is wrapped in its own name.
+ *
+ * Only unwraps when the top level has none of the schema's fields and the inner
+ * object has at least one, so a schema with a field really called `properties`
+ * is left alone.
+ */
+export function unwrapEcho(value, jsonSchema, name) {
+  const keys = Object.keys(jsonSchema?.properties ?? {});
+  if (!keys.length || !isObject(value) || keys.some((k) => k in value)) return value;
+  const entries = Object.values(value);
+  const candidates = [value.properties, name ? value[name] : undefined, entries.length === 1 ? entries[0] : undefined];
+  return candidates.find((c) => isObject(c) && keys.some((k) => k in c)) ?? value;
+}
+
 export function jsonInstructions(name, jsonSchema) {
+  // The meta keys add nothing to the answer and are what start a model copying
+  // the schema instead of filling it in.
+  const { $schema, $id, ...shape } = jsonSchema ?? {};
   return [
     `Return only one JSON object${name ? ` (${name})` : ''}. No Markdown, no code fences, no commentary.`,
-    ...(jsonSchema ? ['It must match this JSON schema:', JSON.stringify(jsonSchema)] : []),
+    ...(jsonSchema
+      ? [
+          'It must match this JSON schema:',
+          JSON.stringify(shape),
+          'The schema describes your answer, it is not part of it. Put each value at the top level of the object, and never write the words "type", "properties" or "required" as keys.',
+        ]
+      : []),
   ].join('\n');
 }

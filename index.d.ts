@@ -179,6 +179,7 @@ export declare class AnthropicProvider implements TextProvider {
 
 export declare function extractJson(text: string): unknown;
 export declare function validate<T>(schema: SchemaLike<T> | undefined, value: unknown): T;
+export declare function unwrapEcho(value: unknown, jsonSchema?: Record<string, unknown>, name?: string): unknown;
 export declare function jsonInstructions(name?: string, jsonSchema?: Record<string, unknown>): string;
 
 export interface CreateOptions {
