@@ -26,8 +26,9 @@ const num = (v) => (v == null || v === '' || Number.isNaN(Number(v)) ? undefined
 /**
  * Builds the router from the environment.
  *
- *   C0MPUTE_API_KEY      Infernet trusted-client key (ifc_...). Without it the
- *                        public limit of 20 requests an hour per IP applies.
+ *   C0MPUTE_API_KEY      Infernet account key (ik_live_...), billed per job. No
+ *                        key, or an ifc_ key with no subject, gets 10 free
+ *                        queries a day.
  *   C0MPUTE_URL          default https://infernetprotocol.com
  *   C0MPUTE_MODELS       comma list, tried in order (C0MPUTE_MODEL also read)
  *   C0MPUTE_ANY_MODEL    1 to let any free node answer as a last resort
