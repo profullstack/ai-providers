@@ -3,6 +3,7 @@
  * ai-providers status            which providers are configured, in call order
  * ai-providers ask "prompt"      one call through the router; prints who answered
  * ai-providers ask --json "..."  same, asking for a JSON object
+ * ai-providers ask --stream "..." same, printing the text as it arrives
  */
 import { createAiProviders } from './index.js';
 
@@ -14,23 +15,27 @@ if (cmd === 'status' || !cmd) {
   console.log(JSON.stringify({ order: order.map((p) => p.name), providers: ai.status() }, null, 2));
 } else if (cmd === 'ask') {
   const json = rest[0] === '--json';
-  const prompt = (json ? rest.slice(1) : rest).join(' ');
+  const stream = rest[0] === '--stream';
+  const prompt = (json || stream ? rest.slice(1) : rest).join(' ');
   if (!prompt) {
-    console.error('usage: ai-providers ask [--json] "prompt"');
+    console.error('usage: ai-providers ask [--json|--stream] "prompt"');
     process.exit(2);
   }
   try {
     const r = json
       ? await ai.generateObject({ user: prompt, maxTokens: 800 })
-      : await ai.generateText({ user: prompt, maxTokens: 800 });
+      : stream
+        ? await ai.streamText({ user: prompt, maxTokens: 800, onToken: (t) => process.stdout.write(t) })
+        : await ai.generateText({ user: prompt, maxTokens: 800 });
     console.error(`# ${r.provider} ${r.model} in=${r.usage.inputTokens} out=${r.usage.outputTokens}`);
     for (const a of r.attempts) console.error(`# skipped: ${a.error.message}`);
-    console.log(json ? JSON.stringify(r.object, null, 2) : r.text);
+    if (stream) process.stdout.write('\n');
+    else console.log(json ? JSON.stringify(r.object, null, 2) : r.text);
   } catch (err) {
     console.error(err.message);
     process.exit(1);
   }
 } else {
-  console.error('usage: ai-providers status | ask [--json] "prompt"');
+  console.error('usage: ai-providers status | ask [--json|--stream] "prompt"');
   process.exit(2);
 }

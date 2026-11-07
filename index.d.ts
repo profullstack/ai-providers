@@ -39,6 +39,22 @@ export interface ProviderOutput {
 export interface TextProvider {
   readonly name: ProviderName;
   generate(req: TextRequest): Promise<ProviderOutput>;
+  /** Optional. Without it, streamText sends the whole generate() answer as one token. */
+  stream?(req: TextRequest, onToken: (text: string) => void): Promise<ProviderOutput>;
+}
+
+export interface StreamRequest extends TextRequest {
+  /** Called with each piece of text as it arrives. */
+  onToken?: (text: string) => void;
+  /** Only these providers, by name. */
+  only?: string[];
+}
+
+export interface TextStream extends AsyncIterable<string> {
+  /** Each piece of text; throws if the call fails. */
+  textStream: AsyncGenerator<string, void, unknown>;
+  /** The same result generateText returns, once the stream is complete. */
+  result: Promise<TextResult>;
 }
 
 export interface Attempt {
@@ -116,6 +132,8 @@ export declare class AiRouter {
     opts?: { feature?: string; only?: string[] },
   ): Promise<{ provider: ProviderName; value: T; attempts: Attempt[] }>;
   generateText(req: TextRequest): Promise<TextResult>;
+  /** After the first token a failure is final and carries `partial: true`. */
+  streamText(req: StreamRequest): Promise<TextResult>;
   generateObject<T = unknown>(req: ObjectRequest<T>): Promise<ObjectResult<T>>;
 }
 
@@ -132,6 +150,8 @@ export declare class ProviderError extends Error {
 }
 export declare class AllProvidersFailedError extends Error {
   readonly attempts: Attempt[];
+  /** true when streamText had already sent text before the failure. */
+  readonly partial?: boolean;
   readonly skipped: { name: string; waitMs: number; reason: string }[];
 }
 export declare function classify(status: number, message?: string): FailureKind;
@@ -155,6 +175,7 @@ export declare class C0mputeProvider implements TextProvider {
   constructor(opts?: C0mputeOptions);
   readonly name: 'c0mpute';
   generate(req: TextRequest): Promise<ProviderOutput>;
+  stream(req: TextRequest, onToken: (text: string) => void): Promise<ProviderOutput>;
 }
 
 export interface PaidOptions {
@@ -170,11 +191,13 @@ export declare class OpenAIProvider implements TextProvider {
   constructor(opts?: PaidOptions);
   readonly name: 'openai';
   generate(req: TextRequest): Promise<ProviderOutput>;
+  stream(req: TextRequest, onToken: (text: string) => void): Promise<ProviderOutput>;
 }
 export declare class AnthropicProvider implements TextProvider {
   constructor(opts?: PaidOptions);
   readonly name: 'anthropic';
   generate(req: TextRequest): Promise<ProviderOutput>;
+  stream(req: TextRequest, onToken: (text: string) => void): Promise<ProviderOutput>;
 }
 
 export declare function extractJson(text: string): unknown;
@@ -194,3 +217,8 @@ export declare function createAiProviders(opts?: CreateOptions): AiRouter;
 export declare function getAi(): AiRouter;
 export declare function generateText(req: TextRequest): Promise<TextResult>;
 export declare function generateObject<T = unknown>(req: ObjectRequest<T>): Promise<ObjectResult<T>>;
+export declare function streamText(req: StreamRequest, router?: AiRouter): TextStream;
+export declare function sseEvents(
+  body: ReadableStream<Uint8Array>,
+  onChunk?: () => void,
+): AsyncGenerator<{ event?: string; data: string }, void, unknown>;

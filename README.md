@@ -35,7 +35,19 @@ const { object } = await generateObject({
 });
 ```
 
-`generateText` and `generateObject` share one router per process (`getAi()`), so rotation and parking see every call. Build your own with `createAiProviders({ env, c0mpute, openai, anthropic, router })`.
+### Streaming
+
+```js
+import { streamText } from '@profullstack/ai-providers';
+
+const s = streamText({ system: 'Translate to French.', user: post.body, maxTokens: 2000 });
+for await (const piece of s.textStream) res.write(piece);
+const { provider, model, text } = await s.result;
+```
+
+c0mpute streams its job's `token` events; OpenAI and Anthropic stream with `stream: true`. Fallback works as for `generateText` until the first piece of text has gone out. After that a failure is final (the error has `partial: true`), because the caller has already shown that text. `onToken` in the request is an alternative to iterating, and `getAi().streamText(req)` returns just the final result.
+
+`generateText`, `generateObject` and `streamText` share one router per process (`getAi()`), so rotation and parking see every call. Build your own with `createAiProviders({ env, c0mpute, openai, anthropic, router })`.
 
 ### Keep your own provider code
 
@@ -75,6 +87,7 @@ A thrown error with `status` 401/402/403, or a 429 or 400 that mentions credits 
 npx @profullstack/ai-providers status
 npx @profullstack/ai-providers ask "one line about c0mpute"
 npx @profullstack/ai-providers ask --json 'Return {"ok": true}'
+npx @profullstack/ai-providers ask --stream "a haiku about peer nodes"
 ```
 
 ## What c0mpute does not do

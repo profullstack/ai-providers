@@ -14,6 +14,7 @@ export * from './c0mpute.js';
 export * from './paid.js';
 export * from './router.js';
 export * from './json.js';
+export * from './sse.js';
 
 const OFF = /^(0|off|false|no|none|disabled?)$/i;
 const list = (v) =>
@@ -99,3 +100,75 @@ export function getAi() {
 export const generateText = (req) => getAi().generateText(req);
 /** Shorthand for getAi().generateObject(req). */
 export const generateObject = (req) => getAi().generateObject(req);
+
+/**
+ * Streams text through the shared router (or `router`).
+ *
+ *   const s = streamText({ user: 'Translate ...' });
+ *   for await (const piece of s.textStream) res.write(piece);
+ *   const { provider, text } = await s.result;
+ *
+ * `textStream` (also the object's own async iterator) yields each piece of
+ * text and throws if the call fails. `result` resolves to the generateText
+ * result. `req.onToken`, if given, is called too.
+ *
+ * @param {import('../index.js').StreamRequest} req
+ * @param {AiRouter} [router]
+ */
+export function streamText(req, router = getAi()) {
+  const queue = [];
+  let wake;
+  let finished = false;
+  let failure;
+  const nudge = () => {
+    const w = wake;
+    wake = undefined;
+    w?.();
+  };
+  const result = router
+    .streamText({
+      ...req,
+      onToken: (t) => {
+        req.onToken?.(t);
+        queue.push(t);
+        nudge();
+      },
+    })
+    .then(
+      (r) => {
+        finished = true;
+        nudge();
+        return r;
+      },
+      (err) => {
+        failure = err;
+        finished = true;
+        nudge();
+        throw err;
+      },
+    );
+  // The failure also surfaces through textStream; a caller that only iterates
+  // must not get an unhandled rejection.
+  result.catch(() => {});
+  async function* pieces() {
+    for (;;) {
+      if (queue.length) {
+        yield queue.shift();
+        continue;
+      }
+      if (finished) {
+        if (failure) throw failure;
+        return;
+      }
+      await new Promise((resolve) => (wake = resolve));
+    }
+  }
+  const textStream = pieces();
+  return {
+    textStream,
+    result,
+    [Symbol.asyncIterator]() {
+      return textStream;
+    },
+  };
+}
