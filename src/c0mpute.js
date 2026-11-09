@@ -68,12 +68,26 @@ export class C0mputeProvider {
    *
    * @param {import('../index.js').TextRequest} req
    * @param {(text: string) => void} onToken
+   *
+   * `req.onStatus(status)`, when given, hears where the job is so a UI can say
+   * more than "waiting": `{stage: 'queued', jobId, node, source, model}` once a
+   * node is picked, `{stage: 'started', node, engine, model}` when the node
+   * begins (it is reading the prompt until the first token), `{stage:
+   * 'writing', tokens}` per token, `{stage: 'retry', model, reason}` before the
+   * next model is tried. A throwing listener is ignored.
    */
   stream(req, onToken) {
     return this.#call(req, onToken);
   }
 
   async #call(req, onToken) {
+    const status = (s) => {
+      try {
+        req.onStatus?.(s);
+      } catch {
+        /* a UI bug must not fail the job */
+      }
+    };
     const release = await this.slots.acquire();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? this.timeoutMs);
@@ -110,6 +124,7 @@ export class C0mputeProvider {
             status: 503,
             kind: 'capacity',
           });
+          status({ stage: 'retry', model, reason: job.error ?? 'no node serves this model' });
           continue;
         }
         if (!res.ok || !job.jobId) {
@@ -123,6 +138,13 @@ export class C0mputeProvider {
             kind: 'capacity',
           });
         }
+        status({
+          stage: 'queued',
+          jobId: job.jobId,
+          node: job.provider?.name ?? job.provider?.nodeId ?? null,
+          source: job.source ?? null,
+          model: job.model ?? model ?? null,
+        });
         const attempt = new AbortController();
         const stop = () => attempt.abort();
         controller.signal.addEventListener('abort', stop, { once: true });
@@ -158,7 +180,7 @@ export class C0mputeProvider {
               kind: 'capacity',
             });
           }
-          out = await readStream(stream.body, arm, emit);
+          out = await readStream(stream.body, arm, emit, status);
         } catch (err) {
           if (!stalled) throw err;
           if (emitted) {
@@ -173,6 +195,7 @@ export class C0mputeProvider {
             `${model ?? 'any'}: no answer for ${Math.round(this.stallMs / 1000)}s (job ${job.jobId})`,
             { status: 504, kind: 'capacity' },
           );
+          status({ stage: 'retry', model, reason: last.message });
           continue;
         } finally {
           clearTimeout(stall);
@@ -216,9 +239,10 @@ export function toMessages(req) {
  * `onToken` gets each token as it arrives; if `done` carries a fuller text than
  * the tokens added up to, the missing tail is emitted too.
  */
-export async function readStream(body, onEvent, onToken) {
+export async function readStream(body, onEvent, onToken, onStatus = () => {}) {
   let text = '';
   let model;
+  let tokens = 0;
   for await (const { event, data: raw } of sseEvents(body, onEvent)) {
     if (!event || !raw) continue;
     let data;
@@ -227,10 +251,21 @@ export async function readStream(body, onEvent, onToken) {
     } catch {
       continue;
     }
-    if (event === 'meta' && typeof data.model === 'string') model = data.model;
-    else if (event === 'token' && typeof data.text === 'string') {
+    if (event === 'meta') {
+      if (typeof data.model === 'string') model = data.model;
+      onStatus({
+        stage: 'started',
+        node: data.provider_name ?? data.provider_node_id ?? null,
+        engine: data.engine ?? null,
+        model: model ?? null,
+      });
+    } else if (event === 'token' && typeof data.text === 'string') {
       text += data.text;
-      if (data.text) onToken?.(data.text);
+      if (data.text) {
+        tokens += 1;
+        onToken?.(data.text);
+        onStatus({ stage: 'writing', tokens });
+      }
     } else if (event === 'done') {
       const final = typeof data.text === 'string' && data.text ? data.text : text;
       if (onToken && final.length > text.length && final.startsWith(text)) onToken(final.slice(text.length));

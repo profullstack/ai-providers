@@ -83,6 +83,38 @@ test('C0mputeProvider.stream emits each token and the tail a done event adds', a
   assert.equal(out.model, 'qwen');
 });
 
+test('C0mputeProvider.stream reports queued, started and writing through onStatus', async () => {
+  const fetch = async (url) =>
+    url.endsWith('/api/chat')
+      ? url.includes('nope')
+        ? Response.json({}, { status: 500 })
+        : Response.json({ jobId: 'j9', source: 'p2p', model: 'qwen', provider: { name: 'node-a', nodeId: 'n-a' } })
+      : named([
+          ['job', { status: 'assigned' }],
+          ['meta', { model: 'qwen', provider_name: 'node-a', engine: 'ollama' }],
+          ['token', { text: 'a' }],
+          ['token', { text: 'b' }],
+          ['done', { text: 'ab' }],
+        ]);
+  const seen = [];
+  await new C0mputeProvider({ fetch }).stream(
+    {
+      user: 'hi',
+      onStatus: (s) => {
+        seen.push(s);
+        if (s.stage === 'writing') throw new Error('listener bug must not fail the job');
+      },
+    },
+    () => {},
+  );
+  assert.deepEqual(seen, [
+    { stage: 'queued', jobId: 'j9', node: 'node-a', source: 'p2p', model: 'qwen' },
+    { stage: 'started', node: 'node-a', engine: 'ollama', model: 'qwen' },
+    { stage: 'writing', tokens: 1 },
+    { stage: 'writing', tokens: 2 },
+  ]);
+});
+
 test('C0mputeProvider.stream: a stall after tokens is an error, not a retry on the next model', async () => {
   let jobs = 0;
   const fetch = async (url, init) => {

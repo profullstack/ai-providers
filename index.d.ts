@@ -21,7 +21,15 @@ export interface TextRequest {
   feature?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** c0mpute only: where the job is, for progress UIs. */
+  onStatus?: (status: C0mputeStatus) => void;
 }
+
+export type C0mputeStatus =
+  | { stage: 'queued'; jobId: string; node: string | null; source: string | null; model: string | null }
+  | { stage: 'started'; node: string | null; engine: string | null; model: string | null }
+  | { stage: 'writing'; tokens: number }
+  | { stage: 'retry'; model: string | undefined; reason: string };
 
 export interface Usage {
   inputTokens: number;
