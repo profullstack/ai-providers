@@ -47,6 +47,8 @@ const { provider, model, text } = await s.result;
 
 c0mpute streams its job's `token` events; OpenAI and Anthropic stream with `stream: true`. Fallback works as for `generateText` until the first piece of text has gone out. After that a failure is final (the error has `partial: true`), because the caller has already shown that text. `onToken` in the request is an alternative to iterating, and `getAi().streamText(req)` returns just the final result.
 
+A peer job can wait a while: a CPU node reads a long prompt for a minute or more before its first token. Pass `onStatus` to show where it is: `{stage: 'queued', jobId, node, source, model}` once a node is picked, `{stage: 'started', node, engine}` when that node begins (it is reading the prompt until the first token), `{stage: 'writing', tokens}` per token, and `{stage: 'retry', model, reason}` before the next model is tried. Only c0mpute calls it.
+
 `generateText`, `generateObject` and `streamText` share one router per process (`getAi()`), so rotation and parking see every call. Build your own with `createAiProviders({ env, c0mpute, openai, anthropic, router })`.
 
 ### Keep your own provider code
