@@ -21,7 +21,7 @@ import { sseEvents } from './sse.js';
 export const DEFAULT_C0MPUTE_URL = 'https://infernetprotocol.com';
 export const DEFAULT_C0MPUTE_MODELS = [
   // House models: every Infernet node pulls these (infernetprotocol.com/house-models.json).
-  'huihui_ai/qwen3.5-abliterated:9b',
+  'eriktonon/qwen3.8-uncensored:9b',
   'qwen2.5:7b',
   'qwen3:4b',
   'gemma3:4b',
