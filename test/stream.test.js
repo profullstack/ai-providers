@@ -262,3 +262,31 @@ test('streamText() yields pieces and resolves result; failures throw from the it
   }, /AI generation failed/);
   await assert.rejects(bad.result, /AI generation failed/);
 });
+
+test('C0mputeProvider.stream reports a requeue as waiting, and network_busy ends with the user message', async () => {
+  let calls = 0;
+  const fetch = async (url) => {
+    if (url.endsWith('/api/chat')) {
+      calls++;
+      return Response.json({ jobId: 'j1', source: 'p2p', model: 'm1' });
+    }
+    return named([
+      ['status', { state: 'waiting', message: 'no free node; back in the queue (position 2, try 1 of 3)', queue_position: 1, requeues: 1, max_requeues: 3 }],
+      ['error', { message: 'Network is busy. Run a node or wait.', code: 'network_busy', run_a_node: 'https://example.test/node' }],
+    ]);
+  };
+  const seen = [];
+  const p = new C0mputeProvider({ fetch, models: ['m1', 'm2'] });
+  await assert.rejects(
+    p.stream({ user: 'hi', onStatus: (s) => seen.push(s) }, () => {}),
+    (err) => err.code === 'network_busy' && err.userMessage === 'Network is busy. Run a node or wait.' && err.runANode === 'https://example.test/node',
+  );
+  assert.equal(calls, 1, 'busy is final: no second model is tried');
+  assert.deepEqual(seen.find((s) => s.stage === 'waiting'), {
+    stage: 'waiting',
+    message: 'no free node; back in the queue (position 2, try 1 of 3)',
+    position: 2,
+    requeues: 1,
+    maxRequeues: 3,
+  });
+});

@@ -73,7 +73,7 @@ export class C0mputeProvider {
    * more than "waiting": `{stage: 'queued', jobId, node, source, model}` once a
    * node is picked, `{stage: 'started', node, engine, model}` when the node
    * begins (it is reading the prompt until the first token), `{stage:
-   * 'writing', tokens}` per token, `{stage: 'retry', model, reason}` before the
+   * 'writing', tokens}` per token, `{stage: 'waiting', message, position, requeues, maxRequeues}` when the network's queue puts the job back, `{stage: 'retry', model, reason}` before the
    * next model is tried. A throwing listener is ignored.
    */
   stream(req, onToken) {
@@ -270,11 +270,28 @@ export async function readStream(body, onEvent, onToken, onStatus = () => {}) {
       const final = typeof data.text === 'string' && data.text ? data.text : text;
       if (onToken && final.length > text.length && final.startsWith(text)) onToken(final.slice(text.length));
       return { text: final, model };
+    } else if (event === 'status' && data && typeof data === 'object') {
+      // The queue put the job back (no free node yet): say where it is.
+      onStatus({
+        stage: 'waiting',
+        message: typeof data.message === 'string' ? data.message : null,
+        position: Number.isFinite(data.queue_position) ? data.queue_position + 1 : null,
+        requeues: data.requeues ?? null,
+        maxRequeues: data.max_requeues ?? null,
+      });
     } else if (event === 'error') {
-      throw new ProviderError('c0mpute', String(data.message ?? data.error ?? 'job failed'), {
-        status: 502,
+      const err = new ProviderError('c0mpute', String(data.message ?? data.error ?? 'job failed'), {
+        status: data.code === 'network_busy' ? 503 : 502,
         kind: 'capacity',
       });
+      // "network_busy": the network's queue already retried; the caller should
+      // tell the user (err.userMessage) and stop, not try another model.
+      if (data.code) err.code = String(data.code);
+      if (data.code === 'network_busy') {
+        err.userMessage = String(data.message ?? 'Network is busy. Run a node or wait.');
+        if (data.run_a_node) err.runANode = String(data.run_a_node);
+      }
+      throw err;
     }
   }
   // No done event: the node or the connection died mid-answer.
