@@ -47,7 +47,6 @@ Survey date 2026-11-02. Read-only. Source: `git grep` against each repo's **orig
 | commenting-web | not on dev2 | Node | 1 | lib/openai.mjs | no | no | no | no | S | |
 | networking-bots | not deployed | Node bot | 1 | src/services/llm.mjs (Groq then OpenAI) | no | no | no | no | S | |
 | reddit-networking-bot | not deployed | Node bot | 1 | src/services/llm.mjs (Groq then OpenAI) | no | no | no | no | S | A copy of networking-bots' llm.mjs. |
-| vu1nz-gh-actions | GitHub Action | Python | 1 | vu1nz/ai/providers.py | no | no | no | no | S | Python can't import the npm package; point it at c0mpute's OpenAI-compatible endpoint. |
 | pickupwidget-web | not on dev2 | SvelteKit | 1 | scripts/createBlogpost.js | no | dall-e-3 | no | no | S | dead/example: a hand-run script. |
 | sh1pt | sh1pt.com (dev2) | Next/Python, Docker | 57 (one per provider package) | packages/ai/* (~60 provider packages) | no | no | **yes**: the product is a provider catalogue | mentioned in docs only | S | Not a conversion: add a packages/ai/c0mpute. |
 | summary-forge-module | npm @profullstack/summary-forge-module 1.10.2 | Node lib | 9 | src/summary-forge.js (one class, 8 calls) + index.js | no | no | no | no | M | Many prompts but one client; probably the backend for summaryforge-pwa. |
@@ -59,7 +58,6 @@ Survey date 2026-11-02. Read-only. Source: `git grep` against each repo's **orig
 | postammo.com | postammo.com (dev2) | Next/Bun, Docker | 4 | none (api/generate route, lib/generation.ts, lib/script-generation.ts, scripts/generate-infographic) | no | dall-e-3 in lib/image-generation.ts, gpt-image in scripts | no | no | M | |
 | b1dz.com | b1dz.com (dev2) | Next, Docker | 4 | packages/ai-analyzer/src/providers.ts + apps/web/src/lib/strategy-ai.ts (Anthropic, CF Workers AI fallback) | no | no | partly (model-list probe; DB settings row overrides env) | no | M | Keep the settings-row override working. |
 | c0upons | c0upons.com (dev2) | Next/Bun, Docker | 4 | none (lib/scrape.ts, api/webhooks/email, lib/reveal-coupon.ts, lib/reveal-code.ts) | no | no | reveal-code.ts uses the Anthropic beta `toolRunner` with MCP tools (obscura) | no | M | scrape and email are easy. The agentic tool loop needs tool calling or stays on Claude. |
-| vu1nz.com | vu1nz.com (dev2) | Python CLI + Next marketing site | 4 | vu1nz/ai/providers.py (OpenAI, Anthropic, OpenRouter, Ollama) | no | no | partly (secret_hunter probes api.openai.com to validate found keys) | no | M | Python: add a c0mpute client class (OpenAI-compatible). |
 | coinpayportal | coinpayportal.com (dev2) | Next, Supabase edge | 3 | none (lib/ask/answer.ts: Anthropic beta, OpenAI /v1/responses fallback; lib/finances/categorize-model.ts: beta structured output) | no | no | no | no | M | Also consumes autoblog. Financial categorization; regression-test the JSON. |
 | saasrow-web | saasrow.com (dev2) | Next/Bun + Supabase edge functions (Deno) | 3 | none (edge functions draft-email-broadcast, fetch-metadata, generate-news-post) | no | dall-e-3 in generate-banner-images | no | no | M | The package must load in Deno via `npm:`. |
 | aiornot.vote | aiornot.vote (dev2) | Next/Bun, Docker | 3 | none (lib/ai-vision.ts, lib/newsletter.ts, packages/seed/src/tips.ts) | no | gpt-image-1 seed images; vision input | no | no | M | newsletter and tips are S. ai-vision is image classification and needs vision. |
@@ -82,20 +80,20 @@ Survey date 2026-11-02. Read-only. Source: `git grep` against each repo's **orig
 
 ## Totals
 
-- **Input and scope:** 115 input lines. 25 were skipped (list below), leaving **90 repos surveyed**. The 22-repo legacy template family is one table row.
-- **Need some work: 82 repos.**
-  - **S: 61.** 39 single repos plus the 22 legacy template copies, which one sweep can cover.
-  - **M: 20.**
-    - 14 are plain conversions: summary-forge-module, firstpayinguser, ugig.net, fasting, makedemo, postammo, b1dz, c0upons, vu1nz.com, coinpayportal, saasrow, aiornot, linkedin-networking-bot, imageroster.
+- **Input and scope:** 113 input lines. 25 were skipped (list below), leaving **88 repos surveyed**. The 22-repo legacy template family is one table row.
+- **Need some work: 80 repos.**
+  - **S: 60.** 38 single repos plus the 22 legacy template copies, which one sweep can cover.
+  - **M: 19.**
+    - 13 are plain conversions: summary-forge-module, firstpayinguser, ugig.net, fasting, makedemo, postammo, b1dz, c0upons, coinpayportal, saasrow, aiornot, linkedin-networking-bot, imageroster.
     - 6 are vendor-specific "add c0mpute as an option" repos: tronbrowser, mcp-server, chovy-ai, mediaanalyzer, vicoa, getprivacycode.
   - **L: 1** (pairux.com).
 - **No conversion: 8.**
   - outreachgraph is already on c0mpute.
   - 4 are images-only (opensourcelegends, nightcell7, moshcoding, launch.anapp.now).
   - 3 are dead or PHP (playground, easyapplier-web, nicheforge-wordpress).
-- **Live on dev2 with text generation to convert: 29 apps.**
+- **Live on dev2 with text generation to convert: 28 apps.**
   - S: agenticjobs, mynaposter, nixamp, advis0r, rssamplifier, demo.movie, bittorrented, brisk.news, smshub, profullstack.com, ringhuman, reeleel, pwamart, qaaas, meshhook (script only).
-  - M: ugig, postammo, b1dz, coinpayportal, saasrow, c0upons, aiornot, vu1nz, chovy, tronbrowser, mediaanalyzer, getprivacycode.
+  - M: ugig, postammo, b1dz, coinpayportal, saasrow, c0upons, aiornot, chovy, tronbrowser, mediaanalyzer, getprivacycode.
   - Also sh1pt (S) and pairux (L).
   - Converting autoblog also covers its 7 consumers indirectly.
 - **Embeddings:** none in any production code. The only `text-embedding` hits are model-list fixtures in tests (getprivacycode, mediaanalyzer).
@@ -111,7 +109,7 @@ Survey date 2026-11-02. Read-only. Source: `git grep` against each repo's **orig
   7. makedemo 5
   8. postammo.com 4
   9. b1dz.com 4
-  10. c0upons 4 (vu1nz.com, link-directories and amazon-affiliate also have 4)
+  10. c0upons 4 (link-directories and amazon-affiliate also have 4)
 
 ## Skipped (25)
 
@@ -140,7 +138,6 @@ Survey date 2026-11-02. Read-only. Source: `git grep` against each repo's **orig
 - **coinpayportal, cli-tools, profullstack-web, media-streamer, sh1pt:** the c0mpute/infernet hits are comments, docs, book text, feed lists and sites.json, not inference.
 - **nixamp:** the transcription hits are local whisper.cpp, not OpenAI.
 - **`messages.create` from Mailgun or Twilio, not Anthropic:** lead-generator (email/sms services), firstpayinguser-web (email.js, email-service.js), globalthreat-web (alert daemon).
-- **`/v1/messages` that are not Anthropic:** smshub (Telnyx and its own API), ringhuman (Telnyx), agenticjobs/ugig/pairux/chovy (their own inbox/messages APIs), vu1nz (endpoint wordlists, mail.tm).
-- **vu1nz.com secret_hunter:** calls api.openai.com/v1/models to check whether a leaked key is live. That is a security probe, not AI usage.
+- **`/v1/messages` that are not Anthropic:** smshub (Telnyx and its own API), ringhuman (Telnyx), agenticjobs/ugig/pairux/chovy (their own inbox/messages APIs).
 - **Media regex noise (no real image/audio AI):** launchpadder-web (OpenAI only in CSP, prometheus probe and nock tests), amazon-affiliate (`createImageFilePaths`), mediaanalyzer and chovy (`createImageBitmap`), propozio-web (.socket blobs), outreachgraph ("transcribe" strings in tests), mcp-server (whisper mentions in README/docs/examples, though modelProviders.js transcribeAudio is real).
 - **No surveyed repo was entirely a false positive.** Every row has at least one real OpenAI/Anthropic call, though some are only in hand-run scripts.
